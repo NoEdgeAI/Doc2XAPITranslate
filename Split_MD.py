@@ -1,5 +1,7 @@
 import re
 from googletrans import Translator as GoogleTranslator
+import concurrent.futures
+from tqdm import tqdm
 
 
 class Translator:
@@ -71,16 +73,38 @@ class Translator:
 
     def translate_chunks(self, chunks):
         translated_chunks = []
-        for chunk in chunks:
-            try:
-                translated = self.translator.translate(
-                    chunk, src=self.src, dest=self.dest
-                ).text
-            except Exception as e:
-                # 如果翻译失败，返回原始文本
-                translated = chunk
-            translated_chunks.append(translated)
-        return translated_chunks
+        #! Wait to change
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [
+                executor.submit(self._translate_single_chunk, chunk) for chunk in chunks
+            ]
+
+            for future in tqdm(
+                concurrent.futures.as_completed(futures),
+                total=len(chunks),
+                desc="翻译进度",
+            ):
+                try:
+                    translated = future.result()
+                    translated_chunks.append(translated)
+                except Exception as e:
+                    print(f"Failed to translate chunk: {e}")
+                    # 如果翻译失败,将对应的原始文本添加到结果中
+                    chunk_index = futures.index(future)
+                    translated_chunks.append(chunks[chunk_index])
+
+        # 按原始顺序排序结果
+        sorted_chunks = [None] * len(chunks)
+        for i, future in enumerate(futures):
+            sorted_chunks[i] = translated_chunks[futures.index(future)]
+
+        return sorted_chunks
+
+    def _translate_single_chunk(self, chunk):
+        try:
+            return self.translator.translate(chunk, src=self.src, dest=self.dest).text
+        except Exception as e:
+            raise e
 
     def restore_placeholders(self, text):
         for placeholder, original in self.placeholder_mapping.items():
@@ -115,57 +139,11 @@ class Translator:
 
 
 translator = Translator(src="en", dest="zh-cn")
-markdown_text = """
-# Example Title
-
-This is an example containing an inline formula: $F\\left( \\cdot \\right)$ and a display formula:
-
-$$
-E = mc^2
-$$
-
-Here is a [link](https://example.com) and an image:
-
-<img src="https://cdn.noedgeai.com/01938a5f-d42c-718d-ae8a-ed76877e1886_4.jpg?x=448&y=147&w=900&h=660"/>
-
-| Header1 | Header2 |
-|---------|---------|
-| Cell1   | Cell2   |
-
-<!-- Media -->
-
-<table>
-  <tr>
-    <td>Method</td>
-    <td>ASR (↑)</td>
-    <td>FID (↓)</td>
-    <td>PSNR (↑)</td>
-  </tr>
-  <tr>
-    <td>Adv-Diffusion</td>
-    <td>53.43</td>
-    <td>15.34</td>
-    <td>22.01</td>
-  </tr>
-  <tr>
-    <td>w/o Adaptive Strength</td>
-    <td>71.11</td>
-    <td>62.37</td>
-    <td>12.62</td>
-  </tr>
-  <tr>
-    <td>w/o Mask</td>
-    <td>59.11</td>
-    <td>55.23</td>
-    <td>13.22</td>
-  </tr>
-</table>
-
-Table 3: Ablation study experimental results with several metrics.
-
-<div>This is an HTML tag</div>
-"""
-
+with open(
+    "Test/Liu-等---2024---Adv-Diffusion-Imperceptible-Adversarial-Face-Identity-Attack-.pdf-2024-12-16-19-31-56.md",
+    "r",
+) as f:
+    markdown_text = f.read()
 translated_text = translator.translate_text(markdown_text)
 with open("Test/translated.md", "w") as f:
     f.write(translated_text)
