@@ -242,8 +242,12 @@ if __name__ == "__main__":
         encoding="utf-8",
     ) as f:
         input_md = f.read()
-    from Translates.Google import google_translate
+    # from Translates.Google import google_translate
 
-    output_md = process_markdown(input_markdown=input_md, translate=google_translate())
+    # output_md = process_markdown(input_markdown=input_md, translate=google_translate())
+
+    from Translates.DeepLX import deeplx_translate
+    translate = deeplx_translate(base_url="https://deeplx.op414.com/translate")
+    output_md = process_markdown(input_markdown=input_md, translate=translate)
     with open("Test/translated.md", "w", encoding="utf-8") as f:
         f.write(output_md)
