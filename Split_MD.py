@@ -177,7 +177,7 @@ def concurrent_translate(A: List[Block]) -> List[Block]:
                 translated_content, prev_block or "", next_block or ""
             )
             for placeholder, formula in placeholders.items():
-                translated = translated.replace(placeholder, formula)
+                translated = translated.replace(placeholder, f" {formula} ")
             if "⚛️" in translated:
                 sentences = re.split(r"(?<=[。？！.!?;；])", block.content)
                 translated_sentences = [translate(s, "", "") for s in sentences]
@@ -201,12 +201,43 @@ def concurrent_translate(A: List[Block]) -> List[Block]:
 
 def combine_blocks(A: List[Block]) -> str:
     combined = []
-    for block in A:
+    special_types = ["table", "block_formula", "image", "link_image", "link"]
+    for i, block in enumerate(A):
+        # Add newline before special blocks
+        if block.type in special_types and (
+            i == 0 or A[i - 1].type not in special_types
+        ):
+            combined.append("\n")
+
         combined.append(block.content)
-    return "\n\n".join(combined)
+
+        # Add newline after special blocks
+        if block.type in special_types and (
+            i == len(A) - 1 or A[i + 1].type not in special_types
+        ):
+            combined.append("\n")
+
+    return "".join(combined)
 
 
-def main(input_markdown: str) -> str:
+def process_markdown(input_markdown: str) -> str:
+    # Preprocess markdown content
+    pattern1 = re.compile(
+        r"\\begin{center}\s*\\adjustbox{max width=\\textwidth}{\s*(.*?)\s*\\end{tabular}\s*}\s*\\end{center}",
+        re.DOTALL,
+    )
+    replacement1 = r"\\begin{center}\n\1\n\\end{tabular}\n\\end{center}"
+    input_markdown = re.sub(pattern1, replacement1, input_markdown)
+
+    pattern2 = re.compile(r"\\tag\{(.*?)\}")
+    replacement2 = r"\\qquad \\text{(\1)}"
+    input_markdown = re.sub(pattern2, replacement2, input_markdown)
+
+    # Remove media and footnote comments
+    input_markdown = re.sub(r"<!-- Media -->\n?", "", input_markdown)
+    input_markdown = re.sub(r"<!-- Footnote -->\n?", "", input_markdown)
+
+    # Process blocks
     blocks = split_markdown(input_markdown)
     blocks = split_text_blocks(blocks)
     blocks = concurrent_translate(blocks)
@@ -221,6 +252,6 @@ if __name__ == "__main__":
         encoding="utf-8",
     ) as f:
         input_md = f.read()
-    output_md = main(input_md)
+    output_md = process_markdown(input_md)
     with open("Test/translated.md", "w", encoding="utf-8") as f:
         f.write(output_md)
