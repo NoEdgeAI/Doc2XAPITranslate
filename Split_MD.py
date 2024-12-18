@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass
 from typing import List
 import concurrent.futures
-from googletrans import Translator as GoogleTranslator
 from tqdm import tqdm
 
 
@@ -106,15 +105,6 @@ def split_text_blocks(A: List[Block]) -> List[Block]:
     return new_blocks
 
 
-def translate(text: str, prev_text: str, next_text: str) -> str:
-    try:
-        T = GoogleTranslator()
-        return T.translate(text, src="en", dest="zh-cn").text
-    except Exception as e:
-        print(f"Error: {e}")
-        return text
-
-
 def replace_inline_formula(
     text: str, placeholder_counter: int, placeholders: dict
 ) -> str:
@@ -130,7 +120,7 @@ def replace_inline_formula(
     return inline_formula_pattern.sub(replacer, text)
 
 
-def concurrent_translate(A: List[Block]) -> List[Block]:
+def concurrent_translate(A: List[Block], translate: callable) -> List[Block]:
     placeholders = {}
     placeholder_counter = 1
 
@@ -220,7 +210,7 @@ def combine_blocks(A: List[Block]) -> str:
     return "".join(combined)
 
 
-def process_markdown(input_markdown: str) -> str:
+def process_markdown(input_markdown: str, translate: callable) -> str:
     # Preprocess markdown content
     pattern1 = re.compile(
         r"\\begin{center}\s*\\adjustbox{max width=\\textwidth}{\s*(.*?)\s*\\end{tabular}\s*}\s*\\end{center}",
@@ -240,7 +230,7 @@ def process_markdown(input_markdown: str) -> str:
     # Process blocks
     blocks = split_markdown(input_markdown)
     blocks = split_text_blocks(blocks)
-    blocks = concurrent_translate(blocks)
+    blocks = concurrent_translate(A=blocks, translate=translate)
     output_markdown = combine_blocks(blocks)
     return output_markdown
 
@@ -252,6 +242,8 @@ if __name__ == "__main__":
         encoding="utf-8",
     ) as f:
         input_md = f.read()
-    output_md = process_markdown(input_md)
+    from Translates.Google import google_translate
+
+    output_md = process_markdown(input_markdown=input_md, translate=google_translate())
     with open("Test/translated.md", "w", encoding="utf-8") as f:
         f.write(output_md)
