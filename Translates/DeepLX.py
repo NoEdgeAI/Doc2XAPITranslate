@@ -22,6 +22,8 @@ def deeplx_translate(
             data = {"text": text, "source_lang": src, "target_lang": dest}
             post_data = json.dumps(data)
             response = httpx.post(url=deeplx_api, data=post_data, timeout=10.0)
+            if response.status_code != 200:
+                raise Exception(f"HTTP request failed: {response.text}")
             result = json.loads(response.text)
             return result["data"]
         except Exception as e:
