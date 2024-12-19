@@ -7,6 +7,7 @@ import time
 def Process_MD(
     md_file: str, translate: callable, thread: int = 10, output_path: str = "./Output"
 ):
+    print(f"Processing markdown file: {md_file}")
     with open(md_file, "r", encoding="utf-8") as f:
         input_md = f.read()
     output_md = process_markdown(

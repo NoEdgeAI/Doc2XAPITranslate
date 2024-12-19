@@ -45,8 +45,10 @@ system_prompt = None if system_prompt == "" else system_prompt
 input_prompt = None if input_prompt == "" else input_prompt
 
 
-def get_translator():
+def get_translator(choice=None):
     """Get translator based on environment variable or user selection"""
+    if choice:
+        return create_translator(choice)
     if translate_use:
         return create_translator(translate_use)
 
@@ -81,7 +83,7 @@ def create_translator(name):
     if name == "openai":
         if not openai_apikey or openai_apikey == "sk-1234567":
             print("Error: OpenAI API key not set")
-            sys.exit(1)
+            raise Exception("OpenAI API key not set")
         return openai_translate(
             api_key=openai_apikey,
             base_url=openai_baseurl,
@@ -107,7 +109,7 @@ def create_translator(name):
     elif name == "deepseek":
         if not deepseek_api or deepseek_api == "sk-1234567":
             print("Error: DeepSeek API key not set")
-            sys.exit(1)
+            raise Exception("DeepSeek API key not set")
         return deepseek_translate(
             api_key=deepseek_api,
             src=llm_src,
@@ -122,7 +124,7 @@ def create_translator(name):
     elif name == "deepl":
         if not deepl_apikey or deepl_apikey == "":
             print("Error: DeepL API key not set")
-            sys.exit(1)
+            raise Exception("DeepL API key not set")
         return deepl_translate(api_key=deepl_apikey, dest=deepl_dest)
     elif name == "google":
         from Translates.Google import google_translate
@@ -132,7 +134,7 @@ def create_translator(name):
         )
     else:
         print(f"Unknown translator: {name}")
-        sys.exit(1)
+        raise Exception(f"Unknown translator: {name}")
 
 
 def main():
@@ -143,7 +145,7 @@ def main():
         test = translator("Hello, how are you?", "", "")
         if test == "Hello, how are you?":
             print("Translator test failed, please check your settings")
-            sys.exit(1)
+            raise Exception("Translator test failed")
         print(f"Translator test successful: {test}")
 
     # Get file path from user
@@ -151,11 +153,11 @@ def main():
 
     if not os.path.exists(file_path):
         print(f"Error: File {file_path} does not exist")
-        sys.exit(1)
+        raise FileNotFoundError(f"File {file_path} does not exist")
 
     if not file_path.endswith(".md") and not file_path.endswith(".pdf"):
         print("Error: File must be a markdown file (.md) or a PDF file (.pdf)")
-        sys.exit(1)
+        raise ValueError("File must be a markdown file (.md) or a PDF file (.pdf)")
 
     if file_path.endswith(".pdf"):
         print("Converting PDF to markdown using Doc2X...")
@@ -165,7 +167,7 @@ def main():
             or os.getenv("DOC2X_APIKEY") is None
         ):
             print("Error: Please set your DOC2X_APIKEY")
-            sys.exit(1)
+            raise Exception("Please set your DOC2X_APIKEY")
         client = Doc2X(debug=True)
         md_text, _, flag = client.pdf2file(
             pdf_file=file_path,
@@ -173,7 +175,7 @@ def main():
         )
         if flag:
             print("Error: PDF to markdown conversion failed")
-            sys.exit(1)
+            raise Exception("PDF to markdown conversion failed")
         output_md_path = os.path.join(
             "Output", os.path.basename(file_path).split(".")[0] + ".md"
         )
