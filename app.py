@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QTextEdit,
     QFrame,
+    QProgressBar,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
@@ -31,11 +32,13 @@ class TranslateThread(QThread):
     output = Signal(str)
     finished = Signal()
     error = Signal(str)
+    progress = Signal(int, int)  # current, total
 
-    def __init__(self, file_path, config):
+    def __init__(self, file_path, config, translator_type):
         super().__init__()
         self.file_path = file_path
         self.config = config
+        self.translator_type = translator_type
 
     def run(self):
         try:
@@ -51,11 +54,31 @@ class TranslateThread(QThread):
 
             # Run translation
             from Main import get_translator, Process_MD
+            from tqdm import tqdm
+
+            # Override tqdm for progress updates
+            def custom_tqdm(*args, **kwargs):
+                total = kwargs.get("total", 0)
+                tqdm_instance = tqdm(*args, **kwargs)
+
+                # Avoid recursion by using a non-recursive update method
+                def update_wrapper(n=1):
+                    result = tqdm_instance._original_update(n)
+                    self.progress.emit(tqdm_instance.n, total)
+                    return result
+
+                tqdm_instance._original_update = tqdm_instance.update
+                tqdm_instance.update = update_wrapper
+                return tqdm_instance
+
+            import Split_MD
+
+            Split_MD.tqdm = custom_tqdm
 
             print("Running translation...")
 
             # Get translator based on config
-            translator = get_translator(self.translator_combo.currentText())
+            translator = get_translator(self.translator_type)
             if self.file_path.endswith(".pdf"):
                 from pdfdeal import Doc2X
 
@@ -188,6 +211,12 @@ class MainWindow(QMainWindow):
         self.start_btn.clicked.connect(self.start_translation)
         layout.addWidget(self.start_btn)
 
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.hide()
+        layout.addWidget(self.progress_bar)
+
         # Output text
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
@@ -196,7 +225,11 @@ class MainWindow(QMainWindow):
 
         # Open folder button
         self.open_folder_btn = QPushButton("打开输出文件夹")
-        self.open_folder_btn.clicked.connect(lambda: os.startfile("Output"))
+        self.open_folder_btn.clicked.connect(
+            lambda: os.system(
+                "xdg-open Output" if os.name == "posix" else "start Output"
+            )
+        )
         self.open_folder_btn.hide()
         layout.addWidget(self.open_folder_btn)
 
@@ -321,18 +354,31 @@ class MainWindow(QMainWindow):
         self.config["THREADS"] = str(self.thread_spin.value())
         self.save_config()
 
-        # Show output area
+        # Show output area and progress bar
         self.output_text.clear()
         self.output_text.show()
+        self.progress_bar.show()
+        self.progress_bar.setValue(0)
 
         # Create and start translation thread
-        self.translate_thread = TranslateThread(self.file_drop.file_path, self.config)
+        self.translate_thread = TranslateThread(
+            self.file_drop.file_path, self.config, self.translator_combo.currentText()
+        )
         self.translate_thread.output.connect(lambda x: self.output_text.append(x))
-        self.translate_thread.finished.connect(lambda: self.open_folder_btn.show())
+        self.translate_thread.finished.connect(self.on_translation_finished)
         self.translate_thread.error.connect(
             lambda x: self.output_text.append(f"Error: {x}")
         )
+        self.translate_thread.progress.connect(self.update_progress)
         self.translate_thread.start()
+
+    def update_progress(self, current, total):
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current)
+
+    def on_translation_finished(self):
+        self.open_folder_btn.show()
+        self.progress_bar.hide()
 
 
 if __name__ == "__main__":
