@@ -48,9 +48,24 @@ class TranslateThread(QThread):
 
             # Override print function
             import builtins
+            import logging
 
             original_print = builtins.print
             builtins.print = custom_print
+
+            # Configure logging to use custom print
+            class CustomHandler(logging.Handler):
+                def emit(self, record):
+                    msg = self.format(record)
+                    custom_print(msg)
+
+            # Set up logging
+            logger = logging.getLogger()
+            logging.getLogger("pdfdeal").setLevel(logging.DEBUG)
+            handler = CustomHandler()
+            formatter = logging.Formatter("%(levelname)s: %(message)s")
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
 
             # Run translation
             from Main import get_translator, Process_MD
@@ -82,7 +97,7 @@ class TranslateThread(QThread):
             if self.file_path.endswith(".pdf"):
                 from pdfdeal import Doc2X
 
-                client = Doc2X(debug=True)
+                client = Doc2X()
                 md_text, _, flag = client.pdf2file(
                     pdf_file=self.file_path,
                     output_format="text",
@@ -104,8 +119,9 @@ class TranslateThread(QThread):
                 thread=int(self.config.get("THREADS", 10)),
             )
 
-            # Restore original print
+            # Restore original print and remove logging handler
             builtins.print = original_print
+            logger.removeHandler(handler)
             self.finished.emit()
 
         except Exception as e:
@@ -220,6 +236,7 @@ class MainWindow(QMainWindow):
         # Output text
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
+        self.output_text.setMinimumHeight(200)  # Set minimum height to 300
         self.output_text.hide()
         layout.addWidget(self.output_text)
 
@@ -316,30 +333,29 @@ class MainWindow(QMainWindow):
 
         # Get translator
         from Main import get_translator
-
-        # Show testing dialog
         from PySide6.QtWidgets import QMessageBox
+        from PySide6.QtCore import QTimer
 
-        testing_dialog = QMessageBox()
-        testing_dialog.setWindowTitle("测试翻译器")
-        testing_dialog.setText("正在测试翻译器...")
-        testing_dialog.setStandardButtons(QMessageBox.NoButton)
-        testing_dialog.show()
+        # Use QTimer to show the message in a non-blocking way
+        QTimer.singleShot(
+            0,
+            lambda: (
+                self.output_text.append("提示: 正在测试翻译器，这可能需要一些时间.."),
+                self.output_text.show(),
+            ),
+        )
 
         try:
             translator = get_translator(self.translator_combo.currentText())
             # Test translation
             test = translator("Hello, how are you?", "", "")
             if test == "Hello, how are you?":
-                testing_dialog.done(0)
                 QMessageBox.critical(self, "错误", "翻译器测试失败，请检查设置")
                 return
 
-            testing_dialog.done(0)
             QMessageBox.information(self, "成功", f"翻译器测试成功: {test}")
 
         except Exception as e:
-            testing_dialog.done(0)
             QMessageBox.critical(self, "错误", f"翻译器测试失败: {str(e)}")
 
     def start_translation(self):
