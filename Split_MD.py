@@ -120,7 +120,9 @@ def replace_inline_formula(
     return inline_formula_pattern.sub(replacer, text)
 
 
-def concurrent_translate(A: List[Block], translate: callable) -> List[Block]:
+def concurrent_translate(
+    A: List[Block], translate: callable, thread: int
+) -> List[Block]:
     placeholders = {}
     placeholder_counter = 1
 
@@ -177,7 +179,7 @@ def concurrent_translate(A: List[Block], translate: callable) -> List[Block]:
         return block
 
     total_blocks = len(A)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=thread) as executor:
         A = list(
             tqdm(
                 executor.map(process_block, A),
@@ -210,7 +212,7 @@ def combine_blocks(A: List[Block]) -> str:
     return "".join(combined)
 
 
-def process_markdown(input_markdown: str, translate: callable) -> str:
+def process_markdown(input_markdown: str, translate: callable, thread: int = 10) -> str:
     # Preprocess markdown content
     pattern1 = re.compile(
         r"\\begin{center}\s*\\adjustbox{max width=\\textwidth}{\s*(.*?)\s*\\end{tabular}\s*}\s*\\end{center}",
@@ -230,24 +232,6 @@ def process_markdown(input_markdown: str, translate: callable) -> str:
     # Process blocks
     blocks = split_markdown(input_markdown)
     blocks = split_text_blocks(blocks)
-    blocks = concurrent_translate(A=blocks, translate=translate)
+    blocks = concurrent_translate(A=blocks, translate=translate, thread=thread)
     output_markdown = combine_blocks(blocks)
     return output_markdown
-
-
-if __name__ == "__main__":
-    with open(
-        "Test/Liu-等---2024---Adv-Diffusion-Imperceptible-Adversarial-Face-Identity-Attack-.pdf-2024-12-18-14-34-50.md",
-        "r",
-        encoding="utf-8",
-    ) as f:
-        input_md = f.read()
-    # from Translates.Google import google_translate
-
-    # output_md = process_markdown(input_markdown=input_md, translate=google_translate())
-
-    from Translates.DeepLX import deeplx_translate
-    translate = deeplx_translate(base_url="https://deeplx.op414.com/translate")
-    output_md = process_markdown(input_markdown=input_md, translate=translate)
-    with open("Test/translated.md", "w", encoding="utf-8") as f:
-        f.write(output_md)

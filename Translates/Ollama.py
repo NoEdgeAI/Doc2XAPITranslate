@@ -2,13 +2,13 @@ from openai import OpenAI
 import json
 
 
-def openai_translate(
-    api_key: str,
-    base_url: str = "https://api.openai.com/v1",
+def ollama_translate(
+    api_key: str = "ollama",
+    base_url: str = "http://localhost:11434/v1",
     src: str = "English",
     dest: str = "中文",
-    model="gpt-4o-mini",
-    tempterature=1.0,
+    model="qwen2.5",
+    tempterature=0.8,
     system_prompt: str = None,
     input_prompt: str = None,
     extra_type="markdown",

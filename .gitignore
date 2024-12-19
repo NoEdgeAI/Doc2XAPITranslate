@@ -1,3 +1,5 @@
 Test
 .pytest_cache
 __pycache__
+Test.py
+.env
