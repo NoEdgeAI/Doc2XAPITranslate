@@ -8,8 +8,10 @@ from Translates.DeepLX import deeplx_translate
 from Translates.DeepL import deepl_translate
 from Translates.Google import google_translate
 from MD_Translate import Process_MD
+from pdfdeal import Doc2X
 
-load_dotenv()
+ENV_PATH = ".env" if os.path.exists(".env") else "example.env"
+load_dotenv(ENV_PATH)
 
 # Get translator settings from environment variables
 translate_use = os.getenv("TRANSLATE_USE")
@@ -39,6 +41,9 @@ input_prompt = os.getenv("input", "")
 extra_type = os.getenv("extra_type", "markdown")
 llm_src = os.getenv("llm_src", "English")
 llm_dest = os.getenv("llm_dest", "中文")
+
+system_prompt = None if system_prompt == "" else system_prompt
+input_prompt = None if input_prompt == "" else input_prompt
 
 
 def get_translator():
@@ -75,7 +80,7 @@ def get_translator():
 def create_translator(name):
     """Create translator instance based on name"""
     if name == "openai":
-        if not openai_apikey:
+        if not openai_apikey or openai_apikey == "sk-1234567":
             print("Error: OpenAI API key not set")
             sys.exit(1)
         return openai_translate(
@@ -101,7 +106,7 @@ def create_translator(name):
             extra_type=extra_type,
         )
     elif name == "deepseek":
-        if not deepseek_api:
+        if not deepseek_api or deepseek_api == "sk-1234567":
             print("Error: DeepSeek API key not set")
             sys.exit(1)
         return deepseek_translate(
@@ -116,7 +121,7 @@ def create_translator(name):
     elif name == "deeplx":
         return deeplx_translate(base_url=deeplx_url, src=deeplx_src, dest=deeplx_dest)
     elif name == "deepl":
-        if not deepl_apikey:
+        if not deepl_apikey or deepl_apikey == "":
             print("Error: DeepL API key not set")
             sys.exit(1)
         return deepl_translate(api_key=deepl_apikey, dest=deepl_dest)
@@ -147,9 +152,31 @@ def main():
         print(f"Error: File {file_path} does not exist")
         sys.exit(1)
 
-    if not file_path.endswith(".md"):
-        print("Error: File must be a markdown file (.md)")
+    if not file_path.endswith(".md") and not file_path.endswith(".pdf"):
+        print("Error: File must be a markdown file (.md) or a PDF file (.pdf)")
         sys.exit(1)
+
+    if file_path.endswith(".pdf"):
+        print("Converting PDF to markdown using Doc2X...")
+        if (
+            os.getenv("DOC2X_APIKEY") == "sk-1234567"
+            or os.getenv("DOC2X_APIKEY") == ""
+            or os.getenv("DOC2X_APIKEY") is None
+        ):
+            print("Error: Please set your DOC2X_APIKEY")
+            sys.exit(1)
+        client = Doc2X(debug=True)
+        md_text, _, flag = client.pdf2file(
+            pdf_file="file_path",
+            output_format="text",
+        )
+        output_md_path = os.path.join(
+            "Output", os.path.basename(file_path).split(".")[0] + ".md"
+        )
+        os.makedirs("Output", exist_ok=True)
+        with open(output_md_path, "w") as f:
+            f.write(md_text)
+        file_path = output_md_path
 
     # Process the file
     Process_MD(md_file=file_path, translate=translator, thread=threads)

@@ -229,6 +229,10 @@ def process_markdown(input_markdown: str, translate: callable, thread: int = 10)
     input_markdown = re.sub(r"<!-- Media -->\n?", "", input_markdown)
     input_markdown = re.sub(r"<!-- Footnote -->\n?", "", input_markdown)
 
+    # Replace \( \) with $ and \[ \] with $$ for math expressions
+    input_markdown = re.sub(r"\\[()]", "$", input_markdown)
+    input_markdown = re.sub(r"\\[\[\]]", "$$", input_markdown)
+
     # Process blocks
     blocks = split_markdown(input_markdown)
     blocks = split_text_blocks(blocks)
