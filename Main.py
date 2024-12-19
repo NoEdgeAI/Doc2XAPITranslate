@@ -6,7 +6,6 @@ from Translates.Ollama import ollama_translate
 from Translates.DeepSeek import deepseek_translate
 from Translates.DeepLX import deeplx_translate
 from Translates.DeepL import deepl_translate
-from Translates.Google import google_translate
 from MD_Translate import Process_MD
 from pdfdeal import Doc2X
 
@@ -126,6 +125,8 @@ def create_translator(name):
             sys.exit(1)
         return deepl_translate(api_key=deepl_apikey, dest=deepl_dest)
     elif name == "google":
+        from Translates.Google import google_translate
+
         return google_translate(
             src=os.getenv("google_src", "en"), dest=os.getenv("google_dest", "zh-cn")
         )
@@ -137,16 +138,16 @@ def create_translator(name):
 def main():
     # Get translator
     translator = get_translator()
-
-    print("Testing translator...")
-    test = translator("Hello, how are you?", "", "")
-    if test == "Hello, how are you?":
-        print("Translator test failed, please check your settings")
-        sys.exit(1)
-    print(f"Translator test successful: {test}")
+    if os.getenv("SKIP_TEST", "false").lower() != "true":
+        print("Testing translator...")
+        test = translator("Hello, how are you?", "", "")
+        if test == "Hello, how are you?":
+            print("Translator test failed, please check your settings")
+            sys.exit(1)
+        print(f"Translator test successful: {test}")
 
     # Get file path from user
-    file_path = input("Please enter the path to your markdown file: ")
+    file_path = input("Please enter the path to your markdown or PDF file: ")
 
     if not os.path.exists(file_path):
         print(f"Error: File {file_path} does not exist")
@@ -167,15 +168,18 @@ def main():
             sys.exit(1)
         client = Doc2X(debug=True)
         md_text, _, flag = client.pdf2file(
-            pdf_file="file_path",
+            pdf_file=file_path,
             output_format="text",
         )
+        if flag:
+            print("Error: PDF to markdown conversion failed")
+            sys.exit(1)
         output_md_path = os.path.join(
             "Output", os.path.basename(file_path).split(".")[0] + ".md"
         )
         os.makedirs("Output", exist_ok=True)
         with open(output_md_path, "w") as f:
-            f.write(md_text)
+            f.write(md_text[0])
         file_path = output_md_path
 
     # Process the file
