@@ -80,24 +80,35 @@ class TranslateThread(QThread):
             # Get translator based on config
             translator = get_translator(self.translator_type)
             if self.file_path.endswith(".pdf"):
-                from pdfdeal import Doc2X
+                import asyncio
+                from pdfdeal.Doc2X.ConvertV2 import upload_pdf, uid_status
 
-                client = Doc2X()
-                md_text, _, flag = client.pdf2file(
-                    pdf_file=self.file_path,
-                    output_format="text",
-                )
-                if flag:
-                    raise Exception("PDF conversion failed")
+                async def process_pdf(file_path, apikey):
+                    print("Uploading PDF...")
+                    uid = await upload_pdf(apikey=apikey, pdffile=file_path)
+                    print("Processing PDF...")
+                    while True:
+                        process, status, texts, locations = await uid_status(
+                            apikey=apikey, uid=uid
+                        )
+                        self.progress.emit(process, 100)
+                        if process == 100:
+                            return texts
+                        await asyncio.sleep(3)
+
+                apikey = self.config.get("DOC2X_APIKEY", "sk-xxx")
+                md_texts = asyncio.run(process_pdf(self.file_path, apikey))
+                md_text = "\n".join(md_texts)
 
                 output_md_path = os.path.join(
                     "Output", os.path.basename(self.file_path).split(".")[0] + ".md"
                 )
                 os.makedirs("Output", exist_ok=True)
                 with open(output_md_path, "w") as f:
-                    f.write(md_text[0])
+                    f.write(md_text)
                 self.file_path = output_md_path
-
+            print("Translating...")
+            self.progress.emit(0, 100)
             Process_MD(
                 md_file=self.file_path,
                 translate=translator,
