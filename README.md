@@ -1,5 +1,8 @@
 # Trans-PolyDocs
 
+🚧 目前项目还处于完善阶段，暂不可用 🚧
+🚧 Project under development, not ready for use yet 🚧
+
 [English](README_EN.md) | 中文
 
 快速将Makdown文档或PDF文档(由Doc2X进行转换)翻译为Markdown/Word，同时保留原有公式/表格/图片格式。
@@ -22,7 +25,7 @@
 >
 > Ubuntu/Debian:终端中运行`sudo apt install pandoc`
 >
-> Arch/Manjaro:`sudo pacman -S pandoc`
+> Arch/Manjaro:`sudo pacman -S pandoc-cli`
 
 ### 预编译程序
 

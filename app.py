@@ -239,7 +239,7 @@ class FileDropWidget(QFrame):
         self.setMinimumHeight(100)
 
         layout = QVBoxLayout()
-        self.label = QLabel("拖拽文件到这里或点击选择文件")
+        self.label = QLabel("拖拽文件到这里或点击选择文件(.md/.pdf)")
         self.label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label)
 
