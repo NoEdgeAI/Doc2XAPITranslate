@@ -1,7 +1,6 @@
 import sys
 import os
 import shutil
-from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -17,6 +16,8 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QFrame,
     QProgressBar,
+    QDialog,
+    QPlainTextEdit,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
@@ -26,6 +27,87 @@ import breeze_pyside6
 # Constants
 CONFIG_DIR = os.path.expanduser("~/.config/Doc2X")
 CONFIG_FILE = os.path.join(CONFIG_DIR, ".env")
+
+
+class LLMSettingsDialog(QDialog):
+    def __init__(self, config, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.setWindowTitle("LLM Settings")
+        self.setMinimumWidth(500)
+
+        layout = QVBoxLayout(self)
+
+        # Temperature
+        temp_layout = QHBoxLayout()
+        temp_layout.addWidget(QLabel("Temperature:"))
+        self.temp_input = QLineEdit()
+        self.temp_input.setText(self.config.get("temperature", "0.8"))
+        temp_layout.addWidget(self.temp_input)
+        layout.addLayout(temp_layout)
+
+        # System Prompt
+        layout.addWidget(QLabel("System Prompt:"))
+        self.system_input = QPlainTextEdit()
+        self.system_input.setPlaceholderText(
+            "可使用 {src} 和 {dest} 作为源语言和目标语言的占位符"
+        )
+        self.system_input.setPlainText(self.config.get("system_prompt", ""))
+        layout.addWidget(self.system_input)
+
+        # Input Prompt
+        layout.addWidget(QLabel("Input Prompt:"))
+        self.input_prompt = QPlainTextEdit()
+        self.input_prompt.setPlaceholderText(
+            "可使用 {{prev_text}}, {{text}}, {{next_text}}, {{dest}} 作为占位符，其中 {{text}} 为必选"
+        )
+        self.input_prompt.setPlainText(self.config.get("input", ""))
+        layout.addWidget(self.input_prompt)
+
+        # Extra Type
+        extra_layout = QHBoxLayout()
+        extra_layout.addWidget(QLabel("Extra Type:"))
+        self.extra_combo = QComboBox()
+        self.extra_combo.addItems(["json", "markdown", "direct"])
+        self.extra_combo.setCurrentText(self.config.get("extra_type", "markdown"))
+        extra_layout.addWidget(self.extra_combo)
+        layout.addLayout(extra_layout)
+
+        # Source Language
+        src_layout = QHBoxLayout()
+        src_layout.addWidget(QLabel("Source Language:"))
+        self.src_input = QLineEdit()
+        self.src_input.setText(self.config.get("llm_src", "English"))
+        src_layout.addWidget(self.src_input)
+        layout.addLayout(src_layout)
+
+        # Target Language
+        dest_layout = QHBoxLayout()
+        dest_layout.addWidget(QLabel("Target Language:"))
+        self.dest_input = QLineEdit()
+        self.dest_input.setText(self.config.get("llm_dest", "中文"))
+        dest_layout.addWidget(self.dest_input)
+        layout.addLayout(dest_layout)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+        layout.addLayout(button_layout)
+
+    def get_settings(self):
+        return {
+            "temperature": self.temp_input.text(),
+            "system_prompt": self.system_input.toPlainText(),
+            "input": self.input_prompt.toPlainText(),
+            "extra_type": self.extra_combo.currentText(),
+            "llm_src": self.src_input.text(),
+            "llm_dest": self.dest_input.text(),
+        }
 
 
 class TranslateThread(QThread):
@@ -196,6 +278,12 @@ class MainWindow(QMainWindow):
         self.translator_combo.setCurrentText("deepseek")
         self.translator_combo.currentTextChanged.connect(self.on_translator_changed)
         translator_layout.addWidget(self.translator_combo)
+
+        # Add LLM Settings button
+        self.llm_settings_btn = QPushButton("LLM设置")
+        self.llm_settings_btn.clicked.connect(self.show_llm_settings)
+        translator_layout.addWidget(self.llm_settings_btn)
+
         layout.addLayout(translator_layout)
 
         # Translator settings
@@ -248,6 +336,13 @@ class MainWindow(QMainWindow):
         # Show initial translator settings
         self.show_translator_settings(self.translator_combo.currentText())
 
+    def show_llm_settings(self):
+        dialog = LLMSettingsDialog(self.config, self)
+        if dialog.exec():
+            settings = dialog.get_settings()
+            self.config.update(settings)
+            self.save_config()
+
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, "r") as f:
@@ -272,6 +367,9 @@ class MainWindow(QMainWindow):
         self.config["TRANSLATE_USE"] = translator
         self.save_config()
         self.show_translator_settings(translator)
+
+        # Show/hide LLM settings button based on translator type
+        self.llm_settings_btn.setVisible(translator in ["deepseek", "openai", "ollama"])
 
     def show_translator_settings(self, translator):
         # Clear previous settings

@@ -15,7 +15,12 @@ def google_translate(src: str = "en", dest: str = "zh-cn") -> callable:
     def translate(text: str, prev_text: str, next_text: str) -> str:
         try:
             T = Translator()
-            return T.translate(text, src=src, dest=dest).text
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(T.translate(text, src=src, dest=dest))
+            loop.close()
+            return result.text
         except Exception as e:
             print(f"Error: {e}")
             return text
