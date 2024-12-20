@@ -94,7 +94,7 @@ class LLMSettingsDialog(QDialog):
 
         # 额外类型
         extra_layout = QHBoxLayout()
-        extra_layout.addWidget(QLabel("额外类型:"))
+        extra_layout.addWidget(QLabel("翻译文本提取方式:"))
         self.extra_combo = QComboBox()
         self.extra_combo.addItems(["json", "markdown", "direct"])
         self.extra_combo.setCurrentText(self.config.get("extra_type", "markdown"))
@@ -270,7 +270,7 @@ class FileDropWidget(QFrame):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Doc2X 翻译器")
+        self.setWindowTitle("翻译")
         self.setMinimumWidth(600)
 
         # 加载或创建配置
@@ -495,8 +495,8 @@ class MainWindow(QMainWindow):
         self.config["THREADS"] = str(self.thread_spin.value())
         self.save_config()
 
-        # 翻译期间禁用按钮
-        self.set_buttons_enabled(False)
+        # 翻译期间禁用按钮和输入框
+        self.set_buttons_and_inputs_enabled(False)
 
         # 显示输出区域和进度条
         self.output_text.clear()
@@ -523,15 +523,17 @@ class MainWindow(QMainWindow):
     def on_translation_finished(self):
         self.open_folder_btn.show()
         self.progress_bar.hide()
-        # 翻译后重新启用按钮
-        self.set_buttons_enabled(True)
+        # 翻译后重新启用按钮和输入框
+        self.set_buttons_and_inputs_enabled(True)
 
-    def set_buttons_enabled(self, enabled):
+    def set_buttons_and_inputs_enabled(self, enabled):
         self.test_btn.setEnabled(enabled)
         self.start_btn.setEnabled(enabled)
         self.api_input.setEnabled(enabled)
         self.translator_combo.setEnabled(enabled)
         self.thread_spin.setEnabled(enabled)
+        self.file_drop.setEnabled(enabled)
+        self.llm_settings_btn.setEnabled(enabled)
 
 
 if __name__ == "__main__":
