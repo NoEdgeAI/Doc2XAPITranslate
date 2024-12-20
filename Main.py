@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-import sys
+from pdfdeal.file_tools import md_replace_imgs
 from Translates.OpenAI import openai_translate
 from Translates.Ollama import ollama_translate
 from Translates.DeepSeek import deepseek_translate
@@ -177,13 +177,14 @@ def main():
             print("Error: PDF to markdown conversion failed")
             raise Exception("PDF to markdown conversion failed")
         output_md_path = os.path.join(
-            "Output", os.path.basename(file_path).split(".")[0] + ".md"
+            "Output", ".".join(os.path.basename(file_path).split(".")[:-1]) + ".md"
         )
         os.makedirs("Output", exist_ok=True)
         with open(output_md_path, "w") as f:
             f.write(md_text[0])
         file_path = output_md_path
-
+    print("Starting to download images(If have)...")
+    md_replace_imgs(mdfile=file_path, replace="local", threads=10)
     # Process the file
     Process_MD(md_file=file_path, translate=translator, thread=threads)
 

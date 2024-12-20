@@ -169,6 +169,8 @@ def concurrent_translate(
                 translated_content, prev_block or "", next_block or ""
             )
             for placeholder, formula in placeholders.items():
+                # Remove spaces between $ and formula content
+                formula = re.sub(r"\$\s*(.*?)\s*\$", r"$\1$", formula)
                 translated = translated.replace(placeholder, f" {formula} ")
             if "⚛️" in translated:
                 sentences = re.split(r"(?<=[。？！.!?;；])", block.content)
@@ -232,6 +234,9 @@ def process_markdown(input_markdown: str, translate: callable, thread: int = 10)
     # Replace \( \) with $ and \[ \] with $$ for math expressions
     input_markdown = re.sub(r"\\[()]", "$", input_markdown)
     input_markdown = re.sub(r"\\[\[\]]", "$$", input_markdown)
+
+    # Replace $$$$ with $$\n$$ for better readability
+    input_markdown = re.sub(r"\$\$\$\$", "$$\n$$", input_markdown)
 
     # Process blocks
     blocks = split_markdown(input_markdown)

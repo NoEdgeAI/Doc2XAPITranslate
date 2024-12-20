@@ -23,8 +23,16 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtCore import QFile, QTextStream
 import breeze_pyside6
+import builtins
+from Main import get_translator, Process_MD
+from tqdm import tqdm
+import Split_MD
+import asyncio
+from pdfdeal.Doc2X.ConvertV2 import upload_pdf, uid_status
+from PySide6.QtWidgets import QMessageBox
+from pdfdeal.file_tools import md_replace_imgs
 
-# Constants
+# 常量
 CONFIG_DIR = os.path.expanduser("~/.config/Doc2X")
 CONFIG_FILE = os.path.join(CONFIG_DIR, ".env")
 
@@ -33,71 +41,95 @@ class LLMSettingsDialog(QDialog):
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self.config = config
-        self.setWindowTitle("LLM Settings")
+        self.setWindowTitle("LLM 设置")
         self.setMinimumWidth(500)
 
         layout = QVBoxLayout(self)
 
-        # Temperature
+        # 温度
         temp_layout = QHBoxLayout()
-        temp_layout.addWidget(QLabel("Temperature:"))
+        temp_layout.addWidget(QLabel("温度:"))
         self.temp_input = QLineEdit()
         self.temp_input.setText(self.config.get("temperature", "0.8"))
         temp_layout.addWidget(self.temp_input)
         layout.addLayout(temp_layout)
 
-        # System Prompt
-        layout.addWidget(QLabel("System Prompt:"))
+        # 系统提示
+        layout.addWidget(QLabel("系统提示:"))
         self.system_input = QPlainTextEdit()
-        self.system_input.setPlaceholderText(
-            "可使用 {src} 和 {dest} 作为源语言和目标语言的占位符"
-        )
         self.system_input.setPlainText(self.config.get("system_prompt", ""))
+        self.system_input.setPlaceholderText("留空则使用默认值(通用翻译提示词)。")
         layout.addWidget(self.system_input)
 
-        # Input Prompt
-        layout.addWidget(QLabel("Input Prompt:"))
+        # 输入提示
+        layout.addWidget(QLabel("输入提示:"))
         self.input_prompt = QPlainTextEdit()
         self.input_prompt.setPlaceholderText(
-            "可使用 {{prev_text}}, {{text}}, {{next_text}}, {{dest}} 作为占位符，其中 {{text}} 为必选"
+            "可使用 {{prev_text}}, {{text}}, {{next_text}}, {{dest}} 作为变量，其中 {{text}} 为必选。留空则使用默认值(通用翻译提示词)。"
         )
         self.input_prompt.setPlainText(self.config.get("input", ""))
         layout.addWidget(self.input_prompt)
 
-        # Extra Type
+        # 变量说明和复制按钮
+        variable_layout = QVBoxLayout()
+        variable_layout.addWidget(QLabel("变量说明:"))
+
+        prev_text_btn = QPushButton("复制 {{prev_text}} - 要翻译文本的前文")
+        prev_text_btn.clicked.connect(lambda: self.copy_to_clipboard("{{prev_text}}"))
+        variable_layout.addWidget(prev_text_btn)
+
+        text_btn = QPushButton("复制 {{text}} - 要翻译的文本")
+        text_btn.clicked.connect(lambda: self.copy_to_clipboard("{{text}}"))
+        variable_layout.addWidget(text_btn)
+
+        next_text_btn = QPushButton("复制 {{next_text}} - 要翻译文本的后文")
+        next_text_btn.clicked.connect(lambda: self.copy_to_clipboard("{{next_text}}"))
+        variable_layout.addWidget(next_text_btn)
+
+        dest_btn = QPushButton("复制 {{dest}} - 翻译目标语言")
+        dest_btn.clicked.connect(lambda: self.copy_to_clipboard("{{dest}}"))
+        variable_layout.addWidget(dest_btn)
+
+        layout.addLayout(variable_layout)
+
+        # 额外类型
         extra_layout = QHBoxLayout()
-        extra_layout.addWidget(QLabel("Extra Type:"))
+        extra_layout.addWidget(QLabel("额外类型:"))
         self.extra_combo = QComboBox()
         self.extra_combo.addItems(["json", "markdown", "direct"])
         self.extra_combo.setCurrentText(self.config.get("extra_type", "markdown"))
         extra_layout.addWidget(self.extra_combo)
         layout.addLayout(extra_layout)
 
-        # Source Language
+        # 源语言
         src_layout = QHBoxLayout()
-        src_layout.addWidget(QLabel("Source Language:"))
+        src_layout.addWidget(QLabel("源语言:"))
         self.src_input = QLineEdit()
         self.src_input.setText(self.config.get("llm_src", "English"))
         src_layout.addWidget(self.src_input)
         layout.addLayout(src_layout)
 
-        # Target Language
+        # 目标语言
         dest_layout = QHBoxLayout()
-        dest_layout.addWidget(QLabel("Target Language:"))
+        dest_layout.addWidget(QLabel("目标语言:"))
         self.dest_input = QLineEdit()
         self.dest_input.setText(self.config.get("llm_dest", "中文"))
         dest_layout.addWidget(self.dest_input)
         layout.addLayout(dest_layout)
 
-        # Buttons
+        # 按钮
         button_layout = QHBoxLayout()
-        save_btn = QPushButton("Save")
+        save_btn = QPushButton("保存")
         save_btn.clicked.connect(self.accept)
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton("取消")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(save_btn)
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
+
+    def copy_to_clipboard(self, text):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
 
     def get_settings(self):
         return {
@@ -114,7 +146,7 @@ class TranslateThread(QThread):
     output = Signal(str)
     finished = Signal()
     error = Signal(str)
-    progress = Signal(int, int)  # current, total
+    progress = Signal(int, int)  # 当前，总计
 
     def __init__(self, file_path, config, translator_type):
         super().__init__()
@@ -124,26 +156,20 @@ class TranslateThread(QThread):
 
     def run(self):
         try:
-            # Create custom print function to emit output
+            # 创建自定义打印函数以发出输出
             def custom_print(text):
                 self.output.emit(str(text))
 
-            # Override print function
-            import builtins
-
+            # 覆盖打印函数
             original_print = builtins.print
             builtins.print = custom_print
 
-            # Run translation
-            from Main import get_translator, Process_MD
-            from tqdm import tqdm
-
-            # Override tqdm for progress updates
+            # 覆盖 tqdm 以更新进度
             def custom_tqdm(*args, **kwargs):
                 total = kwargs.get("total", 0)
                 tqdm_instance = tqdm(*args, **kwargs)
 
-                # Avoid recursion by using a non-recursive update method
+                # 使用非递归更新方法避免递归
                 def update_wrapper(n=1):
                     result = tqdm_instance._original_update(n)
                     self.progress.emit(tqdm_instance.n, total)
@@ -153,22 +179,18 @@ class TranslateThread(QThread):
                 tqdm_instance.update = update_wrapper
                 return tqdm_instance
 
-            import Split_MD
-
             Split_MD.tqdm = custom_tqdm
 
-            print("Running translation...")
+            print("正在运行翻译...")
 
-            # Get translator based on config
+            # 根据配置获取翻译器
             translator = get_translator(self.translator_type)
             if self.file_path.endswith(".pdf"):
-                import asyncio
-                from pdfdeal.Doc2X.ConvertV2 import upload_pdf, uid_status
 
                 async def process_pdf(file_path, apikey):
-                    print("Uploading PDF...")
+                    print("正在上传 PDF...")
                     uid = await upload_pdf(apikey=apikey, pdffile=file_path)
-                    print("Processing PDF...")
+                    print("正在处理 PDF...")
                     while True:
                         process, status, texts, locations = await uid_status(
                             apikey=apikey, uid=uid
@@ -181,15 +203,19 @@ class TranslateThread(QThread):
                 apikey = self.config.get("DOC2X_APIKEY", "sk-xxx")
                 md_texts = asyncio.run(process_pdf(self.file_path, apikey))
                 md_text = "\n".join(md_texts)
+                # 预处理 PDF 转换的 markdown 文本
 
                 output_md_path = os.path.join(
-                    "Output", os.path.basename(self.file_path).split(".")[0] + ".md"
+                    "Output",
+                    ".".join(os.path.basename(self.file_path).split(".")[:-1]) + ".md",
                 )
                 os.makedirs("Output", exist_ok=True)
                 with open(output_md_path, "w") as f:
                     f.write(md_text)
                 self.file_path = output_md_path
-            print("Translating...")
+            print("开始下载图片（如果有）...")
+            md_replace_imgs(mdfile=self.file_path, replace="local", threads=10)
+            print("翻译中...")
             self.progress.emit(0, 100)
             Process_MD(
                 md_file=self.file_path,
@@ -197,7 +223,7 @@ class TranslateThread(QThread):
                 thread=int(self.config.get("THREADS", 10)),
             )
 
-            # Restore original print
+            # 恢复原始打印
             builtins.print = original_print
             self.finished.emit()
 
@@ -234,7 +260,7 @@ class FileDropWidget(QFrame):
 
     def mousePressEvent(self, event):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择文件", "", "Markdown/PDF Files (*.md *.pdf)"
+            self, "选择文件", "", "Markdown/PDF 文件 (*.md *.pdf)"
         )
         if file_path:
             self.file_path = file_path
@@ -244,31 +270,31 @@ class FileDropWidget(QFrame):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Doc2X Translator")
+        self.setWindowTitle("Doc2X 翻译器")
         self.setMinimumWidth(600)
 
-        # Load or create config
+        # 加载或创建配置
         self.config = {}
         self.load_config()
 
-        # Main widget and layout
+        # 主窗口和布局
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         layout = QVBoxLayout(main_widget)
 
-        # File drop area
+        # 文件拖放区域
         self.file_drop = FileDropWidget()
         layout.addWidget(self.file_drop)
 
-        # Doc2X API input
+        # Doc2X API 输入
         api_layout = QHBoxLayout()
-        api_layout.addWidget(QLabel("Doc2X API Key:"))
+        api_layout.addWidget(QLabel("Doc2X API 密钥:"))
         self.api_input = QLineEdit()
         self.api_input.setText(self.config.get("DOC2X_APIKEY", ""))
         api_layout.addWidget(self.api_input)
         layout.addLayout(api_layout)
 
-        # Translator selection
+        # 翻译器选择
         translator_layout = QHBoxLayout()
         translator_layout.addWidget(QLabel("翻译器:"))
         self.translator_combo = QComboBox()
@@ -279,19 +305,19 @@ class MainWindow(QMainWindow):
         self.translator_combo.currentTextChanged.connect(self.on_translator_changed)
         translator_layout.addWidget(self.translator_combo)
 
-        # Add LLM Settings button
-        self.llm_settings_btn = QPushButton("LLM设置")
+        # 添加 LLM 设置按钮
+        self.llm_settings_btn = QPushButton("LLM 设置")
         self.llm_settings_btn.clicked.connect(self.show_llm_settings)
         translator_layout.addWidget(self.llm_settings_btn)
 
         layout.addLayout(translator_layout)
 
-        # Translator settings
+        # 翻译器设置
         self.translator_settings = QWidget()
         self.translator_settings_layout = QVBoxLayout(self.translator_settings)
         layout.addWidget(self.translator_settings)
 
-        # Thread settings
+        # 线程设置
         thread_layout = QHBoxLayout()
         thread_layout.addWidget(QLabel("线程数:"))
         self.thread_spin = QSpinBox()
@@ -300,30 +326,30 @@ class MainWindow(QMainWindow):
         thread_layout.addWidget(self.thread_spin)
         layout.addLayout(thread_layout)
 
-        # Test button
+        # 测试按钮
         self.test_btn = QPushButton("保存并测试")
         self.test_btn.clicked.connect(self.test_translator)
         layout.addWidget(self.test_btn)
 
-        # Start button
+        # 开始按钮
         self.start_btn = QPushButton("开始翻译")
         self.start_btn.clicked.connect(self.start_translation)
         layout.addWidget(self.start_btn)
 
-        # Progress bar
+        # 进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimum(0)
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
-        # Output text
+        # 输出文本
         self.output_text = QTextEdit()
         self.output_text.setReadOnly(True)
-        self.output_text.setMinimumHeight(200)  # Set minimum height to 300
+        self.output_text.setMinimumHeight(200)  # 设置最小高度为 200
         self.output_text.hide()
         layout.addWidget(self.output_text)
 
-        # Open folder button
+        # 打开文件夹按钮
         self.open_folder_btn = QPushButton("打开输出文件夹")
         self.open_folder_btn.clicked.connect(
             lambda: os.system(
@@ -333,7 +359,7 @@ class MainWindow(QMainWindow):
         self.open_folder_btn.hide()
         layout.addWidget(self.open_folder_btn)
 
-        # Show initial translator settings
+        # 显示初始翻译器设置
         self.show_translator_settings(self.translator_combo.currentText())
 
     def show_llm_settings(self):
@@ -363,16 +389,16 @@ class MainWindow(QMainWindow):
                 f.write(f'{key}="{value}"\n')
 
     def on_translator_changed(self, translator):
-        # Update TRANSLATE_USE when translator changes
+        # 当翻译器更改时更新 TRANSLATE_USE
         self.config["TRANSLATE_USE"] = translator
         self.save_config()
         self.show_translator_settings(translator)
 
-        # Show/hide LLM settings button based on translator type
+        # 根据翻译器类型显示/隐藏 LLM 设置按钮
         self.llm_settings_btn.setVisible(translator in ["deepseek", "openai", "ollama"])
 
     def show_translator_settings(self, translator):
-        # Clear previous settings
+        # 清除之前的设置
         while self.translator_settings_layout.count():
             item = self.translator_settings_layout.takeAt(0)
             if item.widget():
@@ -383,9 +409,9 @@ class MainWindow(QMainWindow):
                     if child.widget():
                         child.widget().deleteLater()
 
-        # Add settings based on translator
+        # 根据翻译器添加设置
         if translator == "deepl":
-            self.add_setting("deepl_apikey", "DeepL API Key:")
+            self.add_setting("deepl_apikey", "DeepL API 密钥:")
             self.add_setting("deepl_dest", "目标语言:")
         elif translator == "google":
             self.add_setting("google_src", "源语言:")
@@ -397,8 +423,8 @@ class MainWindow(QMainWindow):
         elif translator == "deepseek":
             self.add_setting("deepseek_api", "DeepSeek API:")
         elif translator == "openai":
-            self.add_setting("openai_apikey", "OpenAI API Key:")
-            self.add_setting("openai_baseurl", "Base URL:")
+            self.add_setting("openai_apikey", "OpenAI API 密钥:")
+            self.add_setting("openai_baseurl", "基础 URL:")
             self.add_setting("openai_model", "模型:")
         elif translator == "ollama":
             self.add_setting("ollama_baseurl", "Ollama URL:")
@@ -418,16 +444,11 @@ class MainWindow(QMainWindow):
         self.save_config()
 
     def test_translator(self):
-        # Save current config
+        # 保存当前配置
         self.config["DOC2X_APIKEY"] = self.api_input.text()
         self.config["TRANSLATE_USE"] = self.translator_combo.currentText()
         self.config["THREADS"] = str(self.thread_spin.value())
         self.save_config()
-
-        # Get translator
-        from Main import get_translator
-        from PySide6.QtWidgets import QMessageBox
-        from PySide6.QtCore import QThread, Signal
 
         class TranslatorTestThread(QThread):
             success = Signal(str)
@@ -442,11 +463,9 @@ class MainWindow(QMainWindow):
                     translator = get_translator(self.translator_type)
                     test = translator("Hello, how are you?", "", "")
                     if test == "Hello, how are you?":
-                        self.failure.emit(
-                            "Translator test failed, please check settings."
-                        )
+                        self.failure.emit("翻译器测试失败，请检查设置。")
                     else:
-                        self.success.emit(f"Translator test succeeded: {test}")
+                        self.success.emit(f"翻译器测试成功: {test}")
                 except Exception as e:
                     self.failure.emit(str(e))
 
@@ -470,29 +489,29 @@ class MainWindow(QMainWindow):
             self.output_text.show()
             return
 
-        # Save current config
+        # 保存当前配置
         self.config["DOC2X_APIKEY"] = self.api_input.text()
         self.config["TRANSLATE_USE"] = self.translator_combo.currentText()
         self.config["THREADS"] = str(self.thread_spin.value())
         self.save_config()
 
-        # Disable buttons during translation
+        # 翻译期间禁用按钮
         self.set_buttons_enabled(False)
 
-        # Show output area and progress bar
+        # 显示输出区域和进度条
         self.output_text.clear()
         self.output_text.show()
         self.progress_bar.show()
         self.progress_bar.setValue(0)
 
-        # Create and start translation thread
+        # 创建并启动翻译线程
         self.translate_thread = TranslateThread(
             self.file_drop.file_path, self.config, self.translator_combo.currentText()
         )
         self.translate_thread.output.connect(lambda x: self.output_text.append(x))
         self.translate_thread.finished.connect(self.on_translation_finished)
         self.translate_thread.error.connect(
-            lambda x: self.output_text.append(f"Error: {x}")
+            lambda x: self.output_text.append(f"错误: {x}")
         )
         self.translate_thread.progress.connect(self.update_progress)
         self.translate_thread.start()
@@ -504,7 +523,7 @@ class MainWindow(QMainWindow):
     def on_translation_finished(self):
         self.open_folder_btn.show()
         self.progress_bar.hide()
-        # Re-enable buttons after translation
+        # 翻译后重新启用按钮
         self.set_buttons_enabled(True)
 
     def set_buttons_enabled(self, enabled):
@@ -518,13 +537,13 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    # Set stylesheet based on system theme
+    # 根据系统主题设置样式表
     palette = app.palette()
     if palette.window().color().lightness() > 128:
-        # Light theme
+        # 浅色主题
         file = QFile(":/light/stylesheet.qss")
     else:
-        # Dark theme
+        # 深色主题
         file = QFile(":/dark/stylesheet.qss")
 
     file.open(QFile.ReadOnly | QFile.Text)
