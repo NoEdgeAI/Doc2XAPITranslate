@@ -48,24 +48,9 @@ class TranslateThread(QThread):
 
             # Override print function
             import builtins
-            import logging
 
             original_print = builtins.print
             builtins.print = custom_print
-
-            # Configure logging to use custom print
-            class CustomHandler(logging.Handler):
-                def emit(self, record):
-                    msg = self.format(record)
-                    custom_print(msg)
-
-            # Set up logging
-            logger = logging.getLogger()
-            logging.getLogger("pdfdeal").setLevel(logging.DEBUG)
-            handler = CustomHandler()
-            formatter = logging.Formatter("%(levelname)s: %(message)s")
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
 
             # Run translation
             from Main import get_translator, Process_MD
@@ -119,9 +104,8 @@ class TranslateThread(QThread):
                 thread=int(self.config.get("THREADS", 10)),
             )
 
-            # Restore original print and remove logging handler
+            # Restore original print
             builtins.print = original_print
-            logger.removeHandler(handler)
             self.finished.emit()
 
         except Exception as e:
