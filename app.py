@@ -329,29 +329,42 @@ class MainWindow(QMainWindow):
         # Get translator
         from Main import get_translator
         from PySide6.QtWidgets import QMessageBox
-        from PySide6.QtCore import QTimer
+        from PySide6.QtCore import QThread, Signal
 
-        # Use QTimer to show the message in a non-blocking way
-        QTimer.singleShot(
-            0,
-            lambda: (
-                self.output_text.append("提示: 正在测试翻译器，这可能需要一些时间.."),
-                self.output_text.show(),
-            ),
+        class TranslatorTestThread(QThread):
+            success = Signal(str)
+            failure = Signal(str)
+
+            def __init__(self, translator_type):
+                super().__init__()
+                self.translator_type = translator_type
+
+            def run(self):
+                try:
+                    translator = get_translator(self.translator_type)
+                    test = translator("Hello, how are you?", "", "")
+                    if test == "Hello, how are you?":
+                        self.failure.emit(
+                            "Translator test failed, please check settings."
+                        )
+                    else:
+                        self.success.emit(f"Translator test succeeded: {test}")
+                except Exception as e:
+                    self.failure.emit(str(e))
+
+        translator_type = self.translator_combo.currentText()
+        self.output_text.append("提示: 正在测试翻译器，这可能需要一些时间..")
+        self.output_text.show()
+
+        self.test_thread = TranslatorTestThread(translator_type)
+        self.test_thread.success.connect(
+            lambda message: QMessageBox.information(self, "成功", message)
         )
-
-        try:
-            translator = get_translator(self.translator_combo.currentText())
-            # Test translation
-            test = translator("Hello, how are you?", "", "")
-            if test == "Hello, how are you?":
-                QMessageBox.critical(self, "错误", "翻译器测试失败，请检查设置")
-                return
-
-            QMessageBox.information(self, "成功", f"翻译器测试成功: {test}")
-
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"翻译器测试失败: {str(e)}")
+        self.test_thread.failure.connect(
+            lambda error: QMessageBox.critical(self, "错误", error)
+        )
+        self.test_thread.finished.connect(self.test_thread.deleteLater)
+        self.test_thread.start()
 
     def start_translation(self):
         if not self.file_drop.file_path:
@@ -364,6 +377,9 @@ class MainWindow(QMainWindow):
         self.config["TRANSLATE_USE"] = self.translator_combo.currentText()
         self.config["THREADS"] = str(self.thread_spin.value())
         self.save_config()
+
+        # Disable buttons during translation
+        self.set_buttons_enabled(False)
 
         # Show output area and progress bar
         self.output_text.clear()
@@ -390,6 +406,15 @@ class MainWindow(QMainWindow):
     def on_translation_finished(self):
         self.open_folder_btn.show()
         self.progress_bar.hide()
+        # Re-enable buttons after translation
+        self.set_buttons_enabled(True)
+
+    def set_buttons_enabled(self, enabled):
+        self.test_btn.setEnabled(enabled)
+        self.start_btn.setEnabled(enabled)
+        self.api_input.setEnabled(enabled)
+        self.translator_combo.setEnabled(enabled)
+        self.thread_spin.setEnabled(enabled)
 
 
 if __name__ == "__main__":
