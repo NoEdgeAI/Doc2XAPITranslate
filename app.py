@@ -33,6 +33,7 @@ from PySide6.QtWidgets import QMessageBox
 from pdfdeal.file_tools import md_replace_imgs
 from file_tool import fix_image_size
 import traceback
+import signal
 
 # 常量
 CONFIG_DIR = os.path.expanduser("~/.config/Doc2X")
@@ -219,7 +220,7 @@ class TranslateThread(QThread):
             # 覆盖 tqdm 以更新进度
             def custom_tqdm(*args, **kwargs):
                 total = kwargs.get("total", 0)
-                kwargs["file"] = sys.stdout
+                kwargs["disable"] = True
                 tqdm_instance = tqdm(*args, **kwargs)
 
                 # 使用非递归更新方法避免递归
@@ -615,6 +616,11 @@ class MainWindow(QMainWindow):
         self.thread_spin.setEnabled(enabled)
         self.file_drop.setEnabled(enabled)
         self.llm_settings_btn.setEnabled(enabled)
+
+    def closeEvent(self, event):
+        # 强制终止所有进程
+        os.kill(os.getpid(), signal.SIGTERM)
+        event.accept()
 
 
 if __name__ == "__main__":
