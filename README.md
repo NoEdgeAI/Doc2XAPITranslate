@@ -17,21 +17,6 @@
 | 拖入或点击导入Markdown/PDF文件，支持自动切换深色模式 | 针对LLM的细化配置，更高自定义空间 | 支持多种翻译器 |
 | <img src="https://github.com/user-attachments/assets/4a56614e-03cd-400f-a7bd-abf1907d0bd1"/>| <img src="https://github.com/user-attachments/assets/748ab2bf-181a-47f1-876f-5219f3a8df56"/>| <img src="https://github.com/user-attachments/assets/c4de4326-f245-4f77-bfe2-587e039c2887"/>     |
 
-```mermaid
-graph TD
-    A[输入 MD 或 PDF 文件] --> B{文件类型}
-    B -->|MD 文件| C[解析 MD 文件]
-    B -->|PDF 文件| D[调用 Doc2X 转换为 MD 文件]
-    D --> C
-    C --> E[按照类型分块]
-    E --> F[调用翻译器进行翻译]
-    F --> G{保留公式翻译成功?}
-    G -->|是| H[保留公式的翻译]
-    G -->|否| I[回滚至纯文本翻译]
-    H --> J[组合翻译后的文档]
-    I --> J
-    J --> K[使用 pandoc 转换为 Word]
-```
 
 ## 使用LLM进行翻译
 
@@ -137,6 +122,23 @@ file_path = "path" # MD文件的路径
 threads = 10 # 翻译的线程数
 Process_MD(md_file=file_path, translate=translator, thread=threads)
 ```
+## 运作流程
+```mermaid
+graph TD
+    A[输入 MD 或 PDF 文件] --> B{文件类型}
+    B -->|MD 文件| C[解析 MD 文件]
+    B -->|PDF 文件| D[调用 Doc2X 转换为 MD 文件]
+    D --> C
+    C --> E[按照类型分块]
+    E --> F[调用翻译器进行翻译]
+    F --> G{保留公式翻译成功?}
+    G -->|是| H[保留公式的翻译]
+    G -->|否| I[回滚至纯文本翻译]
+    H --> J[组合翻译后的文档]
+    I --> J
+    J --> K[使用 pandoc 转换为 Word]
+```
+
 
 ## 打包
 

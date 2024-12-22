@@ -15,22 +15,6 @@ Supports multiple translators and multi-threaded translation:
 | Drag or click to import Markdown/PDF files, supports automatic dark mode switching | Detailed configuration for LLM, offering more customization | Supports multiple translators |
 | <img src="https://github.com/user-attachments/assets/4a56614e-03cd-400f-a7bd-abf1907d0bd1"/>| <img src="https://github.com/user-attachments/assets/748ab2bf-181a-47f1-876f-5219f3a8df56"/>| <img src="https://github.com/user-attachments/assets/c4de4326-f245-4f77-bfe2-587e039c2887"/> |
 
-```mermaid
-graph TD
-A[Input MD or PDF file] --> B{File Type}
-B -->|MD File| C[Parse MD file]
-B -->|PDF File| D[Use Doc2X to convert to MD file]
-D --> C
-C --> E[Segment based on type]
-E --> F[Call translator for translation]
-F --> G{Retain formula translation successful?}
-G -->|Yes| H[Retain formula translation]
-G -->|No| I[Rollback to plain text translation]
-H --> J[Combine translated document]
-I --> J
-J --> K[Use pandoc to convert to Word]
-```
-
 **## Translating using LLM**
 
 If you wish to use LLM for translation, there are additional settings to aid in the translation process.
@@ -134,6 +118,22 @@ from MD_Translate import Process_MD
 file_path = "path"  # Path to the MD file
 threads = 10  # Number of translation threads
 Process_MD(md_file=file_path, translate=translator, thread=threads)
+```
+
+```mermaid
+graph TD
+A[Input MD or PDF file] --> B{File Type}
+B -->|MD File| C[Parse MD file]
+B -->|PDF File| D[Use Doc2X to convert to MD file]
+D --> C
+C --> E[Segment based on type]
+E --> F[Call translator for translation]
+F --> G{Retain formula translation successful?}
+G -->|Yes| H[Retain formula translation]
+G -->|No| I[Rollback to plain text translation]
+H --> J[Combine translated document]
+I --> J
+J --> K[Use pandoc to convert to Word]
 ```
 
 **## Packaging**
