@@ -53,14 +53,16 @@
 > 如您希望将翻译后的文档以Word形式输出，请安装`pandoc`后运行程序。
 >
 > Windows:
-> 
->[下载安装包安装](https://pandoc.org/installing.html)或在Powershell中输入`winget install --source winget --exact --id JohnMacFarlane.Pandoc`
+> [下载安装包安装](https://pandoc.org/installing.html)或在Powershell中输入`winget install --source winget --exact --id JohnMacFarlane.Pandoc`
 >
-> MacOS: 终端中运行`brew install pandoc`
+> MacOS:
+> 终端中运行`brew install pandoc`
 >
-> Ubuntu/Debian: 终端中运行`sudo apt install pandoc`
+> Ubuntu/Debian:
+> 终端中运行`sudo apt install pandoc`
 >
-> Arch/Manjaro: 终端中运行`sudo pacman -S pandoc-cli`
+> Arch/Manjaro:
+> 终端中运行`sudo pacman -S pandoc-cli`
 
 ### 预编译程序
 
