@@ -32,6 +32,7 @@ from pdfdeal.Doc2X.ConvertV2 import upload_pdf, uid_status
 from PySide6.QtWidgets import QMessageBox
 from pdfdeal.file_tools import md_replace_imgs
 from file_tool import fix_image_size
+import traceback
 
 # 常量
 CONFIG_DIR = os.path.expanduser("~/.config/Doc2X")
@@ -198,6 +199,7 @@ class TranslateThread(QThread):
         self.file_path = file_path
         self.config = config
         self.translator_type = translator_type
+        self.is_running = True
 
     def run(self):
         try:
@@ -206,6 +208,8 @@ class TranslateThread(QThread):
 
             # 创建自定义打印函数以发出输出
             def custom_print(text):
+                if not self.is_running:
+                    return
                 self.output.emit(str(text))
 
             # 覆盖打印函数
@@ -215,10 +219,13 @@ class TranslateThread(QThread):
             # 覆盖 tqdm 以更新进度
             def custom_tqdm(*args, **kwargs):
                 total = kwargs.get("total", 0)
+                kwargs["file"] = sys.stdout
                 tqdm_instance = tqdm(*args, **kwargs)
 
                 # 使用非递归更新方法避免递归
                 def update_wrapper(n=1):
+                    if not self.is_running:
+                        return
                     result = tqdm_instance._original_update(n)
                     self.progress.emit(tqdm_instance.n, total)
                     return result
@@ -236,10 +243,12 @@ class TranslateThread(QThread):
             if self.file_path.endswith(".pdf"):
 
                 async def process_pdf(file_path, apikey):
+                    if not self.is_running:
+                        return
                     print("正在上传 PDF...")
                     uid = await upload_pdf(apikey=apikey, pdffile=file_path)
                     print("正在处理 PDF...")
-                    while True:
+                    while True and self.is_running:
                         process, status, texts, locations = await uid_status(
                             apikey=apikey, uid=uid
                         )
@@ -250,6 +259,8 @@ class TranslateThread(QThread):
 
                 apikey = self.config.get("DOC2X_APIKEY", "sk-xxx")
                 md_texts = asyncio.run(process_pdf(self.file_path, apikey))
+                if not self.is_running:
+                    return
                 md_text = "\n".join(md_texts)
                 # 预处理 PDF 转换的 markdown 文本
 
@@ -262,27 +273,42 @@ class TranslateThread(QThread):
                     f.write(md_text)
                 self.file_path = output_md_path
             print("开始下载图片（如果有）...")
+            if not self.is_running:
+                return
             md_replace_imgs(mdfile=self.file_path, replace="local", threads=10)
             print("开始修复图片大小以解决 pandoc 中图片尺寸问题:")
+            if not self.is_running:
+                return
             img_dir = os.path.dirname(self.file_path)
             img_folder = (
                 ".".join(os.path.basename(self.file_path).split(".")[:-1]) + "_img"
             )
             fix_image_size(os.path.join(img_dir, img_folder))
             print("翻译中...")
+            if not self.is_running:
+                return
             self.progress.emit(0, 100)
-            Process_MD(
-                md_file=self.file_path,
-                translate=translator,
-                thread=int(self.config.get("THREADS", 10)),
-            )
+            try:
+                Process_MD(
+                    md_file=self.file_path,
+                    translate=translator,
+                    thread=int(self.config.get("THREADS", 10)),
+                )
+            except Exception as e:
+                print(f"翻译失败: {e}")
+                print(traceback.format_exc())
 
             # 恢复原始打印
             builtins.print = original_print
-            self.finished.emit()
+            if self.is_running:
+                self.finished.emit()
 
         except Exception as e:
-            self.error.emit(str(e))
+            if self.is_running:
+                self.error.emit(str(e))
+
+    def stop(self):
+        self.is_running = False
 
 
 class FileDropWidget(QFrame):
