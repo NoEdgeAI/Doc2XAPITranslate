@@ -1,7 +1,8 @@
 openai
 PySide6
-# "pdfdeal[rag]">=1.0.2
+pdfdeal[rag]>=1.0.2
 git+https://github.com/ssut/py-googletrans.git
 httpx==0.27.2
 pypandoc_binary
 python-dotenv
+pillow

@@ -31,10 +31,55 @@ import asyncio
 from pdfdeal.Doc2X.ConvertV2 import upload_pdf, uid_status
 from PySide6.QtWidgets import QMessageBox
 from pdfdeal.file_tools import md_replace_imgs
+from file_tool import fix_image_size
 
 # 常量
 CONFIG_DIR = os.path.expanduser("~/.config/Doc2X")
 CONFIG_FILE = os.path.join(CONFIG_DIR, ".env")
+
+
+# 设置环境变量
+def set_translator_env(translator_type, config):
+    if translator_type == "deepl":
+        os.environ["deepl_apikey"] = config.get("deepl_apikey", "")
+        os.environ["deepl_dest"] = config.get("deepl_dest", "")
+    elif translator_type == "google":
+        os.environ["google_src"] = config.get("google_src", "")
+        os.environ["google_dest"] = config.get("google_dest", "")
+    elif translator_type == "deeplx":
+        os.environ["deeplx_url"] = config.get("deeplx_url", "")
+        os.environ["deeplx_src"] = config.get("deeplx_src", "")
+        os.environ["deeplx_dest"] = config.get("deeplx_dest", "")
+    elif translator_type == "deepseek":
+        os.environ["deepseek_api"] = config.get("deepseek_api", "")
+        # LLM专属设置
+        os.environ["temperature"] = config.get("temperature", "0.8")
+        os.environ["system_prompt"] = config.get("system_prompt", "")
+        os.environ["input"] = config.get("input", "")
+        os.environ["extra_type"] = config.get("extra_type", "markdown")
+        os.environ["llm_src"] = config.get("llm_src", "English")
+        os.environ["llm_dest"] = config.get("llm_dest", "中文")
+    elif translator_type == "openai":
+        os.environ["openai_apikey"] = config.get("openai_apikey", "")
+        os.environ["openai_baseurl"] = config.get("openai_baseurl", "")
+        os.environ["openai_model"] = config.get("openai_model", "")
+        # LLM专属设置
+        os.environ["temperature"] = config.get("temperature", "0.8")
+        os.environ["system_prompt"] = config.get("system_prompt", "")
+        os.environ["input"] = config.get("input", "")
+        os.environ["extra_type"] = config.get("extra_type", "markdown")
+        os.environ["llm_src"] = config.get("llm_src", "English")
+        os.environ["llm_dest"] = config.get("llm_dest", "中文")
+    elif translator_type == "ollama":
+        os.environ["ollama_baseurl"] = config.get("ollama_baseurl", "")
+        os.environ["ollama_model"] = config.get("ollama_model", "")
+        # LLM专属设置
+        os.environ["temperature"] = config.get("temperature", "0.8")
+        os.environ["system_prompt"] = config.get("system_prompt", "")
+        os.environ["input"] = config.get("input", "")
+        os.environ["extra_type"] = config.get("extra_type", "markdown")
+        os.environ["llm_src"] = config.get("llm_src", "English")
+        os.environ["llm_dest"] = config.get("llm_dest", "中文")
 
 
 class LLMSettingsDialog(QDialog):
@@ -156,6 +201,9 @@ class TranslateThread(QThread):
 
     def run(self):
         try:
+            # 设置环境变量
+            set_translator_env(self.translator_type, self.config)
+
             # 创建自定义打印函数以发出输出
             def custom_print(text):
                 self.output.emit(str(text))
@@ -215,6 +263,10 @@ class TranslateThread(QThread):
                 self.file_path = output_md_path
             print("开始下载图片（如果有）...")
             md_replace_imgs(mdfile=self.file_path, replace="local", threads=10)
+            print("开始修复图片大小以解决 pandoc 中图片尺寸问题:")
+            img_dir = os.path.dirname(self.file_path)
+            img_folder = os.path.basename(self.file_path).split(".")[0] + "_img"
+            fix_image_size(os.path.join(img_dir, img_folder))
             print("翻译中...")
             self.progress.emit(0, 100)
             Process_MD(
@@ -327,7 +379,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(thread_layout)
 
         # 测试按钮
-        self.test_btn = QPushButton("保存并测试")
+        self.test_btn = QPushButton("测试翻译器")
         self.test_btn.clicked.connect(self.test_translator)
         layout.addWidget(self.test_btn)
 
@@ -470,6 +522,7 @@ class MainWindow(QMainWindow):
                     self.failure.emit(str(e))
 
         translator_type = self.translator_combo.currentText()
+        set_translator_env(translator_type, self.config)
         self.output_text.append("提示: 正在测试翻译器，这可能需要一些时间..")
         self.output_text.show()
 

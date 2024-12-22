@@ -49,6 +49,14 @@ cp example.env .env
 
 使用pyinstaller进行打包。使用`pip install pyinstaller`进行安装。
 
+### Linux/MacOS
+
 ```bash
-pyinstaller --onefile --add-data "reference.docx:." --collect-all pypandoc_binary app.py
+pyinstaller --onefile --add-data "reference.docx:." -i icon.png app.py
+```
+
+### Windows
+
+```bash
+pyinstaller --onefile --add-data "reference.docx;." -i icon.png app.py
 ```
