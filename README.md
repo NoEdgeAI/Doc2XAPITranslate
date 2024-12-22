@@ -1,6 +1,7 @@
 # Trans-PolyDocs
 
 🚧 目前项目还处于完善阶段，暂不可用 🚧
+
 🚧 Project under development, not ready for use yet 🚧
 
 [English](README_EN.md) | 中文
@@ -19,7 +20,9 @@
 > [!IMPORTANT]
 > 如您希望将翻译后的文档以Word形式输出，请安装`pandoc`后运行程序。
 >
-> Windows:在Powershell中输入`winget install --source winget --exact --id JohnMacFarlane.Pandoc`或[下载安装包安装](https://pandoc.org/installing.html)
+> Windows:
+> 
+>[下载安装包安装](https://pandoc.org/installing.html)或在Powershell中输入`winget install --source winget --exact --id JohnMacFarlane.Pandoc`或
 >
 > MacOS:终端中运行`brew install pandoc`
 >
@@ -52,11 +55,11 @@ cp example.env .env
 ### Linux/MacOS
 
 ```bash
-pyinstaller --onefile --add-data "reference.docx:." -i icon.png app.py
+pyinstaller -w --onefile --add-data "reference.docx:." --add-data "example.env:." -i icon.png app.py
 ```
 
 ### Windows
 
 ```bash
-pyinstaller --onefile --add-data "reference.docx;." -i icon.png app.py
+pyinstaller -w --onefile --add-data "reference.docx;." --add-data "example.env;." -i icon.png app.py
 ```

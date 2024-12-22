@@ -15,7 +15,7 @@ def Process_MD(
     )
     output_md_path = os.path.join(
         output_path,
-        os.path.basename(md_file).split(".")[0]
+        ".".join(os.path.basename(md_file).split(".")[:-1])
         + "_translated_"
         + time.strftime("%Y%m%d_%H%M%S")
         + ".md",
@@ -25,10 +25,10 @@ def Process_MD(
         f.write(output_md)
 
     print(f"Translated markdown saved to {output_path}")
-    reference_docx = os.path.abspath("reference.docx")
-    output_docx_path = output_md_path.replace(".md", ".docx")
-    print("Translating markdown to docx...")
+    print("Trying ranslating markdown to docx...")
     try:
+        reference_docx = os.path.abspath("reference.docx")
+        output_docx_path = output_md_path.replace(".md", ".docx")
         pypandoc.convert_file(
             output_md_path,
             "docx",

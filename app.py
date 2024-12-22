@@ -258,14 +258,16 @@ class TranslateThread(QThread):
                     ".".join(os.path.basename(self.file_path).split(".")[:-1]) + ".md",
                 )
                 os.makedirs("Output", exist_ok=True)
-                with open(output_md_path, "w") as f:
+                with open(output_md_path, "w", encoding="utf-8") as f:
                     f.write(md_text)
                 self.file_path = output_md_path
             print("开始下载图片（如果有）...")
             md_replace_imgs(mdfile=self.file_path, replace="local", threads=10)
             print("开始修复图片大小以解决 pandoc 中图片尺寸问题:")
             img_dir = os.path.dirname(self.file_path)
-            img_folder = os.path.basename(self.file_path).split(".")[0] + "_img"
+            img_folder = (
+                ".".join(os.path.basename(self.file_path).split(".")[:-1]) + "_img"
+            )
             fix_image_size(os.path.join(img_dir, img_folder))
             print("翻译中...")
             self.progress.emit(0, 100)
@@ -423,7 +425,7 @@ class MainWindow(QMainWindow):
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
@@ -431,12 +433,12 @@ class MainWindow(QMainWindow):
                         self.config[key.strip()] = value.strip().strip('"')
         else:
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            if os.path.exists("example.env"):
-                shutil.copy("example.env", CONFIG_FILE)
+            if os.path.exists("./example.env"):
+                shutil.copy("./example.env", CONFIG_FILE)
                 self.load_config()
 
     def save_config(self):
-        with open(CONFIG_FILE, "w") as f:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             for key, value in self.config.items():
                 f.write(f'{key}="{value}"\n')
 

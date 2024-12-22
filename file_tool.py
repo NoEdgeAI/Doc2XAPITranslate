@@ -13,7 +13,6 @@ def process_image(file_path: str) -> None:
         # Open and resave image
         with Image.open(file_path) as img:
             img.save(file_path, quality=95, optimize=True)
-        print(f"{os.path.basename(file_path)}  ", end="")
     except Exception as e:
         print(f"Error processing {os.path.basename(file_path)}: {str(e)}")
 
