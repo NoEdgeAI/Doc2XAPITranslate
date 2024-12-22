@@ -50,16 +50,10 @@ cp example.env .env
 
 ## 打包
 
-使用pyinstaller进行打包。使用`pip install pyinstaller`进行安装。
-
-### Linux/MacOS
+使用pyinstaller进行打包。使用`pip install pyinstaller`进行安装。运行以下指令：
 
 ```bash
-pyinstaller -w --onefile --add-data "reference.docx:." --add-data "example.env:." -i icon.png app.py
+pyinstaller -w --onefile -i icon.png app.py
 ```
 
-### Windows
-
-```bash
-pyinstaller -w --onefile --add-data "reference.docx;." --add-data "example.env;." -i icon.png app.py
-```
+并复制项目中的`reference.docx`以及`example.env`到打包出的二进制文件同一目录中即可。
