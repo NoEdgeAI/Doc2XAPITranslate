@@ -80,6 +80,34 @@ def get_translator(choice=None):
 
 def create_translator(name):
     """Create translator instance based on name"""
+    # Get translator-specific settings from environment variables
+    openai_apikey = os.getenv("openai_apikey")
+    openai_baseurl = os.getenv("openai_baseurl", "https://api.openai.com/v1")
+    openai_model = os.getenv("openai_model", "gpt-4o-mini")
+
+    ollama_baseurl = os.getenv("ollama_baseurl", "http://localhost:11434/v1")
+    ollama_model = os.getenv("ollama_model", "qwen2.5")
+
+    deepseek_api = os.getenv("deepseek_api")
+
+    deeplx_url = os.getenv("deeplx_url", "http://127.0.0.1:1188/translate")
+    deeplx_src = os.getenv("deeplx_src", "EN")
+    deeplx_dest = os.getenv("deeplx_dest", "ZH")
+
+    deepl_apikey = os.getenv("deepl_apikey")
+    deepl_dest = os.getenv("deepl_dest", "ZH")
+
+    # LLM common settings
+    temperature = float(os.getenv("temperature", 0.8))
+    system_prompt = os.getenv("system_prompt", "")
+    input_prompt = os.getenv("input", "")
+    extra_type = os.getenv("extra_type", "markdown")
+    llm_src = os.getenv("llm_src", "English")
+    llm_dest = os.getenv("llm_dest", "中文")
+
+    system_prompt = None if system_prompt == "" else system_prompt
+    input_prompt = None if input_prompt == "" else input_prompt
+
     if name == "openai":
         if not openai_apikey or openai_apikey == "sk-1234567":
             print("Error: OpenAI API key not set")

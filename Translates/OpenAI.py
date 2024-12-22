@@ -71,43 +71,50 @@ Please proceed with your analysis and translation.
         raise ValueError("input_prompt must contain {{text}} placeholder")
 
     def translate(text: str, prev_text: str, next_text: str) -> str:
-        try:
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {
-                        "role": "user",
-                        "content": input_prompt.replace("{{prev_text}}", prev_text)
-                        .replace("{{dest}}", dest)
-                        .replace("{{text}}", text)
-                        .replace("{{next_text}}", next_text),
-                    },
-                ],
-                temperature=tempterature,
-                stream=False,
-            )
-            result = response.choices[0].message.content
+        retries = 2
+        while retries >= 0:
+            try:
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt,
+                        },
+                        {
+                            "role": "user",
+                            "content": input_prompt.replace("{{prev_text}}", prev_text)
+                            .replace("{{dest}}", dest)
+                            .replace("{{text}}", text)
+                            .replace("{{next_text}}", next_text),
+                        },
+                    ],
+                    temperature=tempterature,
+                    stream=False,
+                )
+                result = response.choices[0].message.content
 
-            if extra_type == "json":
-                try:
-                    return json.loads(result)["translated"]
-                except Exception as e:
-                    print(f"Having trouble extracting JSON: {e}")
-                    return result
-            elif extra_type == "markdown":
-                try:
-                    return result.split("```")[1]
-                except Exception as e:
-                    print(f"Having trouble extracting markdown: {e}")
-                    return result
-            return result
-        except Exception as e:
-            print(f"Error: {e}")
-            return text
+                if extra_type == "json":
+                    try:
+                        return json.loads(result)["translated"]
+                    except Exception as e:
+                        print(f"Having trouble extracting JSON: {e}")
+                        return result
+                elif extra_type == "markdown":
+                    try:
+                        return result[result.find("```") + 3:result.rfind("```")]
+                    except Exception as e:
+                        print(f"Having trouble extracting markdown: {e}")
+                        return result
+                return result
+            except Exception as e:
+                if retries > 0:
+                    print(f"Error occurred: {e}. Retrying... ({retries} attempts left)")
+                    retries -= 1
+                    continue
+                else:
+                    print(f"Error after all retries: {e}")
+                    return text
 
     return translate

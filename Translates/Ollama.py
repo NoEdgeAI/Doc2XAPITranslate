@@ -101,7 +101,7 @@ Please proceed with your analysis and translation.
                     return result
             elif extra_type == "markdown":
                 try:
-                    return result.split("```")[1]
+                    return result[result.find("```") + 3:result.rfind("```")]
                 except Exception as e:
                     print(f"Having trouble extracting markdown: {e}")
                     return result

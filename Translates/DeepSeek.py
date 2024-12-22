@@ -70,43 +70,53 @@ Please proceed with your analysis and translation.
         raise ValueError("input_prompt must contain {{text}} placeholder")
 
     def translate(text: str, prev_text: str, next_text: str) -> str:
-        try:
-            client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {
-                        "role": "user",
-                        "content": input_prompt.replace("{{prev_text}}", prev_text)
-                        .replace("{{dest}}", dest)
-                        .replace("{{text}}", text)
-                        .replace("{{next_text}}", next_text),
-                    },
-                ],
-                temperature=tempterature,
-                stream=False,
-            )
-            result = response.choices[0].message.content
+        retry_count = 0
+        max_retries = 2
+        
+        while retry_count <= max_retries:
+            try:
+                client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt,
+                        },
+                        {
+                            "role": "user",
+                            "content": input_prompt.replace("{{prev_text}}", prev_text)
+                            .replace("{{dest}}", dest)
+                            .replace("{{text}}", text)
+                            .replace("{{next_text}}", next_text),
+                        },
+                    ],
+                    temperature=tempterature,
+                    stream=False,
+                )
+                result = response.choices[0].message.content
 
-            if extra_type == "json":
-                try:
-                    return json.loads(result)["translated"]
-                except Exception as e:
-                    print(f"Having trouble extracting JSON: {e}")
-                    return result
-            elif extra_type == "markdown":
-                try:
-                    return result.split("```")[1]
-                except Exception as e:
-                    print(f"Having trouble extracting markdown: {e}")
-                    return result
-            return result
-        except Exception as e:
-            print(f"Error: {e}")
-            return text
+                if extra_type == "json":
+                    try:
+                        return json.loads(result)["translated"]
+                    except Exception as e:
+                        print(f"Having trouble extracting JSON: {e}")
+                        return result
+                elif extra_type == "markdown":
+                    try:
+                        return result[result.find("```") + 3:result.rfind("```")]
+                    except Exception as e:
+                        print(f"Having trouble extracting markdown: {e}")
+                        return result
+                return result
+                
+            except Exception as e:
+                retry_count += 1
+                if retry_count <= max_retries:
+                    print(f"Error occurred: {e}. Retrying... (Attempt {retry_count} of {max_retries})")
+                    continue
+                else:
+                    print(f"Error after {max_retries} retries: {e}")
+                    return text
 
     return translate

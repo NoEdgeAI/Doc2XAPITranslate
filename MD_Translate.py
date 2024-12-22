@@ -15,7 +15,7 @@ def Process_MD(
     )
     output_md_path = os.path.join(
         output_path,
-        os.path.basename(md_file).split(".")[0]
+        ".".join(os.path.basename(md_file).split(".")[:-1])
         + "_translated_"
         + time.strftime("%Y%m%d_%H%M%S")
         + ".md",
@@ -25,18 +25,18 @@ def Process_MD(
         f.write(output_md)
 
     print(f"Translated markdown saved to {output_path}")
-    reference_docx = os.path.abspath("reference.docx")
-    output_docx_path = output_md_path.replace(".md", ".docx")
-    print("Translating markdown to docx...")
+    print("Trying ranslating markdown to docx...")
     try:
+        output_docx_path = output_md_path.replace(".md", ".docx")
+        reference_docx = os.path.abspath("reference.docx")
+        extra_args = [f"--resource-path={output_path}"]
+        if os.path.exists(reference_docx):
+            extra_args.append(f"--reference-doc={reference_docx}")
         pypandoc.convert_file(
             output_md_path,
             "docx",
             outputfile=output_docx_path,
-            extra_args=[
-                f"--resource-path={output_path}",
-                f"--reference-doc={reference_docx}",
-            ],
+            extra_args=extra_args,
         )
         print(f"Translated docx saved to {output_docx_path}")
     except Exception as e:

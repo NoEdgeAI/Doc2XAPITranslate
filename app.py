@@ -31,10 +31,57 @@ import asyncio
 from pdfdeal.Doc2X.ConvertV2 import upload_pdf, uid_status
 from PySide6.QtWidgets import QMessageBox
 from pdfdeal.file_tools import md_replace_imgs
+from file_tool import fix_image_size
+import traceback
+import signal
 
 # 常量
 CONFIG_DIR = os.path.expanduser("~/.config/Doc2X")
 CONFIG_FILE = os.path.join(CONFIG_DIR, ".env")
+
+
+# 设置环境变量
+def set_translator_env(translator_type, config):
+    if translator_type == "deepl":
+        os.environ["deepl_apikey"] = config.get("deepl_apikey", "")
+        os.environ["deepl_dest"] = config.get("deepl_dest", "")
+    elif translator_type == "google":
+        os.environ["google_src"] = config.get("google_src", "")
+        os.environ["google_dest"] = config.get("google_dest", "")
+    elif translator_type == "deeplx":
+        os.environ["deeplx_url"] = config.get("deeplx_url", "")
+        os.environ["deeplx_src"] = config.get("deeplx_src", "")
+        os.environ["deeplx_dest"] = config.get("deeplx_dest", "")
+    elif translator_type == "deepseek":
+        os.environ["deepseek_api"] = config.get("deepseek_api", "")
+        # LLM专属设置
+        os.environ["temperature"] = config.get("temperature", "0.8")
+        os.environ["system_prompt"] = config.get("system_prompt", "")
+        os.environ["input"] = config.get("input", "")
+        os.environ["extra_type"] = config.get("extra_type", "markdown")
+        os.environ["llm_src"] = config.get("llm_src", "English")
+        os.environ["llm_dest"] = config.get("llm_dest", "中文")
+    elif translator_type == "openai":
+        os.environ["openai_apikey"] = config.get("openai_apikey", "")
+        os.environ["openai_baseurl"] = config.get("openai_baseurl", "")
+        os.environ["openai_model"] = config.get("openai_model", "")
+        # LLM专属设置
+        os.environ["temperature"] = config.get("temperature", "0.8")
+        os.environ["system_prompt"] = config.get("system_prompt", "")
+        os.environ["input"] = config.get("input", "")
+        os.environ["extra_type"] = config.get("extra_type", "markdown")
+        os.environ["llm_src"] = config.get("llm_src", "English")
+        os.environ["llm_dest"] = config.get("llm_dest", "中文")
+    elif translator_type == "ollama":
+        os.environ["ollama_baseurl"] = config.get("ollama_baseurl", "")
+        os.environ["ollama_model"] = config.get("ollama_model", "")
+        # LLM专属设置
+        os.environ["temperature"] = config.get("temperature", "0.8")
+        os.environ["system_prompt"] = config.get("system_prompt", "")
+        os.environ["input"] = config.get("input", "")
+        os.environ["extra_type"] = config.get("extra_type", "markdown")
+        os.environ["llm_src"] = config.get("llm_src", "English")
+        os.environ["llm_dest"] = config.get("llm_dest", "中文")
 
 
 class LLMSettingsDialog(QDialog):
@@ -153,11 +200,17 @@ class TranslateThread(QThread):
         self.file_path = file_path
         self.config = config
         self.translator_type = translator_type
+        self.is_running = True
 
     def run(self):
         try:
+            # 设置环境变量
+            set_translator_env(self.translator_type, self.config)
+
             # 创建自定义打印函数以发出输出
             def custom_print(text):
+                if not self.is_running:
+                    return
                 self.output.emit(str(text))
 
             # 覆盖打印函数
@@ -167,10 +220,13 @@ class TranslateThread(QThread):
             # 覆盖 tqdm 以更新进度
             def custom_tqdm(*args, **kwargs):
                 total = kwargs.get("total", 0)
+                kwargs["disable"] = True
                 tqdm_instance = tqdm(*args, **kwargs)
 
                 # 使用非递归更新方法避免递归
                 def update_wrapper(n=1):
+                    if not self.is_running:
+                        return
                     result = tqdm_instance._original_update(n)
                     self.progress.emit(tqdm_instance.n, total)
                     return result
@@ -188,10 +244,12 @@ class TranslateThread(QThread):
             if self.file_path.endswith(".pdf"):
 
                 async def process_pdf(file_path, apikey):
+                    if not self.is_running:
+                        return
                     print("正在上传 PDF...")
                     uid = await upload_pdf(apikey=apikey, pdffile=file_path)
                     print("正在处理 PDF...")
-                    while True:
+                    while True and self.is_running:
                         process, status, texts, locations = await uid_status(
                             apikey=apikey, uid=uid
                         )
@@ -202,6 +260,8 @@ class TranslateThread(QThread):
 
                 apikey = self.config.get("DOC2X_APIKEY", "sk-xxx")
                 md_texts = asyncio.run(process_pdf(self.file_path, apikey))
+                if not self.is_running:
+                    return
                 md_text = "\n".join(md_texts)
                 # 预处理 PDF 转换的 markdown 文本
 
@@ -210,25 +270,46 @@ class TranslateThread(QThread):
                     ".".join(os.path.basename(self.file_path).split(".")[:-1]) + ".md",
                 )
                 os.makedirs("Output", exist_ok=True)
-                with open(output_md_path, "w") as f:
+                with open(output_md_path, "w", encoding="utf-8") as f:
                     f.write(md_text)
                 self.file_path = output_md_path
             print("开始下载图片（如果有）...")
+            if not self.is_running:
+                return
             md_replace_imgs(mdfile=self.file_path, replace="local", threads=10)
-            print("翻译中...")
-            self.progress.emit(0, 100)
-            Process_MD(
-                md_file=self.file_path,
-                translate=translator,
-                thread=int(self.config.get("THREADS", 10)),
+            print("开始修复图片大小以解决 pandoc 中图片尺寸问题:")
+            if not self.is_running:
+                return
+            img_dir = os.path.dirname(self.file_path)
+            img_folder = (
+                ".".join(os.path.basename(self.file_path).split(".")[:-1]) + "_img"
             )
+            fix_image_size(os.path.join(img_dir, img_folder))
+            print("翻译中...")
+            if not self.is_running:
+                return
+            self.progress.emit(0, 100)
+            try:
+                Process_MD(
+                    md_file=self.file_path,
+                    translate=translator,
+                    thread=int(self.config.get("THREADS", 10)),
+                )
+            except Exception as e:
+                print(f"翻译失败: {e}")
+                print(traceback.format_exc())
 
             # 恢复原始打印
             builtins.print = original_print
-            self.finished.emit()
+            if self.is_running:
+                self.finished.emit()
 
         except Exception as e:
-            self.error.emit(str(e))
+            if self.is_running:
+                self.error.emit(str(e))
+
+    def stop(self):
+        self.is_running = False
 
 
 class FileDropWidget(QFrame):
@@ -327,7 +408,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(thread_layout)
 
         # 测试按钮
-        self.test_btn = QPushButton("保存并测试")
+        self.test_btn = QPushButton("测试翻译器")
         self.test_btn.clicked.connect(self.test_translator)
         layout.addWidget(self.test_btn)
 
@@ -371,7 +452,7 @@ class MainWindow(QMainWindow):
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r") as f:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
@@ -379,12 +460,12 @@ class MainWindow(QMainWindow):
                         self.config[key.strip()] = value.strip().strip('"')
         else:
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            if os.path.exists("example.env"):
-                shutil.copy("example.env", CONFIG_FILE)
+            if os.path.exists("./example.env"):
+                shutil.copy("./example.env", CONFIG_FILE)
                 self.load_config()
 
     def save_config(self):
-        with open(CONFIG_FILE, "w") as f:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             for key, value in self.config.items():
                 f.write(f'{key}="{value}"\n')
 
@@ -470,6 +551,7 @@ class MainWindow(QMainWindow):
                     self.failure.emit(str(e))
 
         translator_type = self.translator_combo.currentText()
+        set_translator_env(translator_type, self.config)
         self.output_text.append("提示: 正在测试翻译器，这可能需要一些时间..")
         self.output_text.show()
 
@@ -534,6 +616,11 @@ class MainWindow(QMainWindow):
         self.thread_spin.setEnabled(enabled)
         self.file_drop.setEnabled(enabled)
         self.llm_settings_btn.setEnabled(enabled)
+
+    def closeEvent(self, event):
+        # 强制终止所有进程
+        os.kill(os.getpid(), signal.SIGTERM)
+        event.accept()
 
 
 if __name__ == "__main__":
