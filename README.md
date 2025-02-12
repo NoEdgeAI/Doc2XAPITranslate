@@ -2,6 +2,9 @@
 
 [English](README_EN.md) | 中文
 
+> [!important]
+> 项目暂不支持保留排版翻译
+
 快速将Makdown文档或PDF文档(由Doc2X进行转换)翻译为Markdown/Word，同时保留原有公式/表格/图片格式。
 
 内置支持多种翻译器，支持多线程翻译：
