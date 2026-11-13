@@ -4,6 +4,8 @@
 
 > [!important]
 > 项目暂不支持保留排版翻译
+>
+> 需要保留排版或双语对照的论文翻译，可以直接使用 [Doc2X 在线文献翻译](https://doc2x.noedgeai.com/paper-translate)：在浏览器里上传 PDF，公式、图表留在原位。
 
 快速将Makdown文档或PDF文档(由Doc2X进行转换)翻译为Markdown/Word，同时保留原有公式/表格/图片格式。
 
